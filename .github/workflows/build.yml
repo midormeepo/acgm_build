@@ -1,0 +1,43 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      # Source lives upstream; this repo only carries the CI. Cloned fresh on
+      # every run into acgm_build/ so nothing local is needed here.
+      - name: Clone ObjectWang/ACGM
+        run: git clone --depth 1 https://github.com/ObjectWang/ACGM acgm_build
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: acgm_build/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Without this every run recompiles all of Tauri from scratch (~15 min)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: acgm_build/src-tauri
+
+      - run: npm ci
+        working-directory: acgm_build
+
+      - run: npm run tauri build
+        working-directory: acgm_build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: acgm-windows
+          path: |
+            acgm_build/src-tauri/target/release/bundle/nsis/*.exe
+            acgm_build/src-tauri/target/release/bundle/msi/*.msi
+            acgm_build/src-tauri/target/release/acgm.exe
+          if-no-files-found: error
