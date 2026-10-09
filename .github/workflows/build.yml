@@ -1,9 +1,15 @@
 name: build
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 版本号，用作 tag 和草稿 Release 名（如 v0.1.0）
+        required: true
+        default: v0.1.0
+
+permissions:
+  contents: write
 
 jobs:
   windows:
@@ -33,6 +39,8 @@ jobs:
       - run: npm run tauri build
         working-directory: acgm_build
 
+      # Before the release step, so a failed upload still leaves the installers
+      # downloadable from the run itself.
       - uses: actions/upload-artifact@v7
         with:
           name: acgm-windows
@@ -41,3 +49,16 @@ jobs:
             acgm_build/src-tauri/target/release/bundle/msi/*.msi
             acgm_build/src-tauri/target/release/acgm.exe
           if-no-files-found: error
+
+      # Draft, so nothing is public until it's reviewed on the Releases page.
+      - name: 草拟 Release 并且上传文件
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ACGM ${{ github.event.inputs.tag_name }}
+          draft: true
+          files: |
+            acgm_build/src-tauri/target/release/bundle/nsis/*.exe
+            acgm_build/src-tauri/target/release/bundle/msi/*.msi
+            acgm_build/src-tauri/target/release/acgm.exe
